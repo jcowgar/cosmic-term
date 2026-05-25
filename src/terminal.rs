@@ -213,6 +213,9 @@ pub struct Metadata {
     pub bg: cosmic_text::Color,
     pub underline_color: cosmic_text::Color,
     pub flags: Flags,
+    /// When set, this cell is a box-drawing/block character that we render
+    /// ourselves (its font glyph is suppressed); see [`crate::box_drawing`].
+    pub box_char: Option<char>,
 }
 
 impl Metadata {
@@ -222,18 +225,16 @@ impl Metadata {
             bg,
             underline_color,
             flags,
-        }
-    }
-
-    fn with_underline_color(self, underline_color: cosmic_text::Color) -> Self {
-        Self {
-            underline_color,
-            ..self
+            box_char: None,
         }
     }
 
     fn with_flags(self, flags: Flags) -> Self {
         Self { flags, ..self }
+    }
+
+    fn with_box_char(self, box_char: Option<char>) -> Self {
+        Self { box_char, ..self }
     }
 }
 
@@ -808,10 +809,20 @@ impl Terminal {
 
                     let start = text.len();
                     // Tab skip/stop is handled by alacritty_terminal
-                    text.push(match indexed.cell.c {
+                    let cell_char = match indexed.cell.c {
                         '\t' => ' ',
                         c => c,
-                    });
+                    };
+                    // Box-drawing and block characters are drawn geometrically
+                    // in terminal_box rather than via the font, so their glyphs
+                    // tile into seamless borders. Suppress the font glyph by
+                    // emitting a space and record the character in the metadata.
+                    let box_char = if crate::box_drawing::is_box_drawing(cell_char) {
+                        Some(cell_char)
+                    } else {
+                        None
+                    };
+                    text.push(if box_char.is_some() { ' ' } else { cell_char });
                     if let Some(zerowidth) = indexed.cell.zerowidth() {
                         for &c in zerowidth {
                             text.push(c);
@@ -926,9 +937,9 @@ impl Terminal {
                         }
                     }
 
-                    let metadata = Metadata::new(bg, fg)
+                    let metadata = Metadata::new(bg, underline_color)
                         .with_flags(flags)
-                        .with_underline_color(underline_color);
+                        .with_box_char(box_char);
                     let (meta_idx, _) = self.metadata_set.insert_full(metadata);
                     attrs = attrs.metadata(meta_idx);
 
