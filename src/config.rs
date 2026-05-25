@@ -228,6 +228,7 @@ pub struct Config {
     pub bold_font_weight: u16,
     pub font_stretch: u16,
     pub font_size_zoom_step_mul_100: u16,
+    pub line_height_mul_100: u16,
     pub opacity: u8,
     pub profiles: BTreeMap<ProfileId, Profile>,
     pub show_headerbar: bool,
@@ -255,6 +256,8 @@ impl Default for Config {
             font_name: "Noto Sans Mono".to_string(),
             font_size: 14,
             font_size_zoom_step_mul_100: 100,
+            // Matches the historical 1.4 multiplier so existing setups are unaffected.
+            line_height_mul_100: 140,
             font_stretch: Stretch::Normal.to_number(),
             font_weight: Weight::NORMAL.0,
             opacity: 100,
@@ -331,7 +334,8 @@ impl Config {
     // Calculate metrics from font size
     pub fn metrics(&self, zoom_adj: i8) -> Metrics {
         let font_size = self.font_size_adjusted(zoom_adj);
-        let line_height = (font_size * 1.4).ceil();
+        let line_height_mul = f32::from(self.line_height_mul_100.max(1)) / 100.0;
+        let line_height = (font_size * line_height_mul).ceil();
         Metrics::new(font_size, line_height)
     }
 

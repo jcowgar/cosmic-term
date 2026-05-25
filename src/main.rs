@@ -374,6 +374,7 @@ pub enum Message {
     DefaultFontSize(usize),
     DefaultFontStretch(usize),
     DefaultFontWeight(usize),
+    DefaultLineHeight(usize),
     DefaultZoomStep(usize),
     DialogMessage(Box<DialogMessage>), // DialogMessage is huge, so we use a box to make the size of this enum smaller on the stack
     Drop(Option<(pane_grid::Pane, segmented_button::Entity, DndDrop)>),
@@ -484,6 +485,8 @@ pub struct App {
     font_names: Vec<String>,
     font_size_names: Vec<String>,
     font_sizes: Vec<u16>,
+    line_height_names: Vec<String>,
+    line_heights: Vec<u16>,
     font_name_faces_map: BTreeMap<String, Vec<FaceInfo>>,
     all_font_weights_vals_names_map: BTreeMap<u16, String>,
     all_font_stretches_vals_names_map: BTreeMap<Stretch, String>,
@@ -1359,6 +1362,10 @@ impl App {
             .curr_font_weights
             .iter()
             .position(|font_weight| font_weight == &self.config.bold_font_weight);
+        let line_height_selected = self
+            .line_heights
+            .iter()
+            .position(|line_height| line_height == &self.config.line_height_mul_100);
         let zoom_step_selected = self
             .zoom_steps
             .iter()
@@ -1475,6 +1482,13 @@ impl App {
                             bold_font_weight_selected,
                             Message::DefaultBoldFontWeight,
                         ),
+                    ),
+                )
+                .add(
+                    widget::settings::item::builder(fl!("default-line-height")).control(
+                        widget::dropdown(&self.line_height_names, line_height_selected, |index| {
+                            Message::DefaultLineHeight(index)
+                        }),
                     ),
                 )
                 .add(
@@ -1806,6 +1820,13 @@ impl Application for App {
             Normal, SemiExpanded, Expanded, ExtraExpanded, UltraExpanded,
         };
 
+        let mut line_height_names = Vec::new();
+        let mut line_heights = Vec::new();
+        for line_height in (100..=200).step_by(5) {
+            line_height_names.push(format!("{:.2}", f32::from(line_height) / 100.0));
+            line_heights.push(line_height);
+        }
+
         let mut zoom_step_names = Vec::new();
         let mut zoom_steps = Vec::new();
         for zoom_step in [25, 50, 75, 100, 150, 200] {
@@ -1847,6 +1868,8 @@ impl Application for App {
             font_names,
             font_size_names,
             font_sizes,
+            line_height_names,
+            line_heights,
             font_name_faces_map,
             all_font_weights_vals_names_map,
             all_font_stretches_vals_names_map,
@@ -2322,6 +2345,15 @@ impl Application for App {
                 }
                 None => {
                     log::warn!("failed to find bold font weight with index {}", index);
+                }
+            },
+            Message::DefaultLineHeight(index) => match self.line_heights.get(index) {
+                Some(line_height) => {
+                    config_set!(line_height_mul_100, *line_height);
+                    return self.update_config();
+                }
+                None => {
+                    log::warn!("failed to find line height with index {}", index);
                 }
             },
             Message::DefaultZoomStep(index) => match self.zoom_steps.get(index) {

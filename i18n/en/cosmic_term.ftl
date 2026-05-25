@@ -53,6 +53,7 @@ default-font-stretch = Font stretch
 default-font-weight = Normal font weight
 default-dim-font-weight = Dim font weight
 default-bold-font-weight = Bold font weight
+default-line-height = Line height
 use-bright-bold = Make bold text brighter
 
 ### Splits
