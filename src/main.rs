@@ -1459,6 +1459,13 @@ impl App {
                     ),
                 )
                 .add(
+                    widget::settings::item::builder(fl!("default-line-height")).control(
+                        widget::dropdown(&self.line_height_names, line_height_selected, |index| {
+                            Message::DefaultLineHeight(index)
+                        }),
+                    ),
+                )
+                .add(
                     widget::settings::item::builder(fl!("default-font-weight")).control(
                         widget::dropdown(
                             &self.curr_font_weight_names,
@@ -1483,13 +1490,6 @@ impl App {
                             bold_font_weight_selected,
                             Message::DefaultBoldFontWeight,
                         ),
-                    ),
-                )
-                .add(
-                    widget::settings::item::builder(fl!("default-line-height")).control(
-                        widget::dropdown(&self.line_height_names, line_height_selected, |index| {
-                            Message::DefaultLineHeight(index)
-                        }),
                     ),
                 )
                 .add(
