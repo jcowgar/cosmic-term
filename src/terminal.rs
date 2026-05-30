@@ -21,8 +21,7 @@ use cosmic::{
     widget::{pane_grid, segmented_button},
 };
 use cosmic_text::{
-    Attrs, AttrsList, Buffer, BufferLine, CacheKeyFlags, Family, LineEnding, Metrics, Shaping,
-    Weight, Wrap,
+    Attrs, AttrsList, Buffer, BufferLine, CacheKeyFlags, Family, LineEnding, Shaping, Weight, Wrap,
 };
 use indexmap::IndexSet;
 use std::{
@@ -289,7 +288,7 @@ impl Terminal {
         let bold_font_weight = app_config.bold_font_weight;
         let use_bright_bold = app_config.use_bright_bold;
 
-        let metrics = Metrics::new(14.0, 21.0);
+        let metrics = app_config.metrics(0);
 
         let default_bg = convert_color(&colors, Color::Named(NamedColor::Background));
         let default_fg = convert_color(&colors, Color::Named(NamedColor::Foreground));
@@ -645,7 +644,7 @@ impl Terminal {
             update_cell_size = true;
         }
 
-        if self.bold_font_weight.0 != config.font_weight {
+        if self.bold_font_weight.0 != config.bold_font_weight {
             self.bold_font_weight = Weight(config.bold_font_weight);
             update_cell_size = true;
         }
@@ -1040,10 +1039,9 @@ impl Terminal {
         x: u32,
         y: u32,
     ) {
-        let term_lock = self.term.lock();
-        let mode = term_lock.mode();
+        let is_sgr = self.term.lock().mode().contains(TermMode::SGR_MOUSE);
 
-        if mode.contains(TermMode::SGR_MOUSE) {
+        if is_sgr {
             let codes = self.mouse_reporter.sgr_mouse_wheel_scroll(
                 self.size().cell_width,
                 self.size().cell_height,
@@ -1057,12 +1055,29 @@ impl Terminal {
                 self.notifier.notify(code);
             }
         } else {
-            MouseReporter::report_mouse_wheel_as_arrows(
-                self,
-                self.size().cell_width,
-                self.size().cell_height,
-                delta,
-            );
+            self.scroll_as_arrows(delta);
+        }
+    }
+
+    pub fn scroll_as_arrows(&mut self, delta: ScrollDelta) {
+        let cell_width = self.size().cell_width;
+        let cell_height = self.size().cell_height;
+        let (_, lines_y) = self
+            .mouse_reporter
+            .accumulate_scroll(delta, cell_width, cell_height);
+        let is_app_cursor = self.term.lock().mode().contains(TermMode::APP_CURSOR);
+        let (up, down) = if is_app_cursor {
+            (&b"\x1BOA"[..], &b"\x1BOB"[..])
+        } else {
+            (&b"\x1B[A"[..], &b"\x1B[B"[..])
+        };
+        const SCROLL_SPEED: u32 = 3;
+        for _ in 0..(lines_y.unsigned_abs() * SCROLL_SPEED) {
+            if lines_y > 0 {
+                self.input_no_scroll(up)
+            } else if lines_y < 0 {
+                self.input_no_scroll(down)
+            }
         }
     }
 }
