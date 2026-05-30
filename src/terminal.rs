@@ -215,7 +215,11 @@ pub struct Metadata {
     pub flags: Flags,
     /// When set, this cell is a box-drawing/block character that we render
     /// ourselves (its font glyph is suppressed); see [`crate::box_drawing`].
-    pub box_char: Option<char>,
+    ///
+    /// The column is the terminal grid column. Shaped glyph positions can drift
+    /// when earlier cells use fallback glyphs whose advance differs from the
+    /// terminal cell width, but box-drawing must stay pinned to the grid.
+    pub box_cell: Option<(char, usize)>,
 }
 
 impl Metadata {
@@ -225,7 +229,7 @@ impl Metadata {
             bg,
             underline_color,
             flags,
-            box_char: None,
+            box_cell: None,
         }
     }
 
@@ -233,8 +237,8 @@ impl Metadata {
         Self { flags, ..self }
     }
 
-    fn with_box_char(self, box_char: Option<char>) -> Self {
-        Self { box_char, ..self }
+    fn with_box_cell(self, box_cell: Option<(char, usize)>) -> Self {
+        Self { box_cell, ..self }
     }
 }
 
@@ -817,12 +821,12 @@ impl Terminal {
                     // in terminal_box rather than via the font, so their glyphs
                     // tile into seamless borders. Suppress the font glyph by
                     // emitting a space and record the character in the metadata.
-                    let box_char = if crate::box_drawing::is_box_drawing(cell_char) {
-                        Some(cell_char)
+                    let box_cell = if crate::box_drawing::is_box_drawing(cell_char) {
+                        Some((cell_char, indexed.point.column.0))
                     } else {
                         None
                     };
-                    text.push(if box_char.is_some() { ' ' } else { cell_char });
+                    text.push(if box_cell.is_some() { ' ' } else { cell_char });
                     if let Some(zerowidth) = indexed.cell.zerowidth() {
                         for &c in zerowidth {
                             text.push(c);
@@ -939,7 +943,7 @@ impl Terminal {
 
                     let metadata = Metadata::new(bg, underline_color)
                         .with_flags(flags)
-                        .with_box_char(box_char);
+                        .with_box_cell(box_cell);
                     let (meta_idx, _) = self.metadata_set.insert_full(metadata);
                     attrs = attrs.metadata(meta_idx);
 

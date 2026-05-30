@@ -508,7 +508,7 @@ where
         // grid (see below) rather than trusting the shaped glyph position.
         let cell_width = terminal.size().cell_width;
 
-        // Render cell backgrounds that do not match default
+        // Render cell backgrounds and decorations that do not match default.
         terminal.with_buffer(|buffer| {
             for run in buffer.layout_runs() {
                 struct BgRect<'a> {
@@ -714,55 +714,56 @@ where
                     view_position,
                     metadata_set,
                 };
-                let line_height = buffer.metrics().line_height;
                 for glyph in run.glyphs {
                     bg_rect.update(glyph, renderer, state.is_focused);
-
-                    // Draw box-drawing/block characters geometrically so their
-                    // lines tile into seamless borders (their font glyph was
-                    // suppressed to a space in terminal.rs).
-                    if let Some(box_char) = metadata_set[glyph.metadata].box_char {
-                        let color = glyph
-                            .color_opt
-                            .unwrap_or(metadata_set[glyph.metadata].underline_color);
-                        let (light, heavy) = box_drawing::line_thickness(glyph.font_size);
-                        // Snap to the cell grid. cosmic-text lays glyphs out by
-                        // their real advance width, so any glyph earlier in the
-                        // line that is not exactly one cell wide (e.g. lazygit's
-                        // merge node U+23E3, wider than a cell in some fonts)
-                        // drifts everything after it. Pinning box-drawing cells
-                        // to column * cell_width keeps lines aligned across rows
-                        // the way a fixed-grid terminal does.
-                        let column = (glyph.x / cell_width).round();
-                        let cell = box_drawing::Cell {
-                            x: view_position.x + column * cell_width,
-                            y: view_position.y + run.line_top,
-                            width: cell_width,
-                            height: line_height,
-                        };
-                        box_drawing::render(box_char, cell, light, heavy, |r| {
-                            renderer.fill_quad(
-                                Quad {
-                                    bounds: Rectangle {
-                                        x: r.x,
-                                        y: r.y,
-                                        width: r.width,
-                                        height: r.height,
-                                    },
-                                    snap: true,
-                                    ..Default::default()
-                                },
-                                Color::from_rgba(
-                                    f32::from(color.r()) / 255.0,
-                                    f32::from(color.g()) / 255.0,
-                                    f32::from(color.b()) / 255.0,
-                                    f32::from(color.a()) / 255.0 * r.alpha,
-                                ),
-                            );
-                        });
-                    }
                 }
                 bg_rect.fill(renderer, state.is_focused);
+            }
+        });
+
+        // Draw box-drawing/block characters geometrically after backgrounds,
+        // otherwise explicit background colors from TUIs can cover the strokes.
+        terminal.with_buffer(|buffer| {
+            let metadata_set = &terminal.metadata_set;
+            let line_height = buffer.metrics().line_height;
+
+            for run in buffer.layout_runs() {
+                for glyph in run.glyphs {
+                    let Some((box_char, column)) = metadata_set[glyph.metadata].box_cell else {
+                        continue;
+                    };
+
+                    let color = glyph
+                        .color_opt
+                        .unwrap_or(metadata_set[glyph.metadata].underline_color);
+                    let (light, heavy) = box_drawing::line_thickness(glyph.font_size);
+                    let cell = box_drawing::Cell {
+                        x: view_position.x + column as f32 * cell_width,
+                        y: view_position.y + run.line_top,
+                        width: cell_width,
+                        height: line_height,
+                    };
+                    box_drawing::render(box_char, cell, light, heavy, |r| {
+                        renderer.fill_quad(
+                            Quad {
+                                bounds: Rectangle {
+                                    x: r.x,
+                                    y: r.y,
+                                    width: r.width,
+                                    height: r.height,
+                                },
+                                snap: true,
+                                ..Default::default()
+                            },
+                            Color::from_rgba(
+                                f32::from(color.r()) / 255.0,
+                                f32::from(color.g()) / 255.0,
+                                f32::from(color.b()) / 255.0,
+                                f32::from(color.a()) / 255.0 * r.alpha,
+                            ),
+                        );
+                    });
+                }
             }
         });
 
